@@ -89,13 +89,15 @@ propositionalize <- function(source.dir = getwd(), source.name, output.dir = get
   intercept <- model.names[1]
   model.names <- model.names[2:length(model.names)]
   
-  # compute the weight based on the model
+  # compute the weight based on the model by computing residuals and setting the weight of objects
+  # to be high where the residuals are low (i.e. for objects which label can be predicted using network attributes)
   weight <- 0
   for (name in model.names) {
     weight <- weight + final.model$coefficients[name] * network.attributes[, c(name)]
   }
   weight <- weight + final.model$coefficients[intercept]
-  weight <- round(abs(weight)*100)
+  residuals <- abs(weight - data.discretized["label"])
+  weight <- 1 / (residuals + 1)
   
   # write out the result
   output.file <- paste(output.dir, output.name, sep = "/")
