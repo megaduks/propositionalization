@@ -1,57 +1,105 @@
-add_new_attributes <- (function(path1,path2,path3){
+#
+# Function performs the propositionalization of relational datasets. It adds attributes representing the network
+# properties of the dataset. In particular, the dataset computes, for each node representing a data object:
+# - degree of the node
+# - closeness of the node
+# - betweenness of the node
+# - transitivity of the node
+
 library(infotheo)
 library(discretization)
-myData <- read.csv(path1, header=T)
-myDataDisc <-myData
-# discretization by entropy
-#myDataDisc <-mdlp(myData)$Disc.data
-# discretization by equalwidth
-for (i in 1:(ncol(myData)-1))
-	myDataDisc[i] <- discretize(myData[i],"equalwidth",sqrt(length(unique(as.vector(unlist(myData[i]))))))
-write.csv(myDataDisc,file = path2, row.names=F)
-
-
-myDataDisc <- read.table(path2, header=T, stringsAsFactors=TRUE,sep=",")
-id <- 1:NROW(myDataDisc)
-myDataDisc <- cbind(id, myDataDisc) 
-for (c in 2:(ncol(myDataDisc)-1)){
-	myDataDisc[,c]= as.integer(myDataDisc[,c])
-}
-
 library(sqldf)
-numOfAttributesOryg <- length(names(myDataDisc))
-joinedTables <- sqldf("select * from myDataDisc m1, myDataDisc m2 where m2.id > m1.id")
-myTable <- 1:nrow(joinedTables)
-for(i in 1:nrow(joinedTables)) {
-	c <- 2
-	sum <-0
-	while(c < numOfAttributesOryg){
-		if(joinedTables[i,c]==joinedTables[i,c+numOfAttributesOryg])
-			sum <- sum + 1		
-		c <- c + 1
-	}
-	myTable[i] <- sum
-}
-
 library(igraph)
 
-library(tnet)
-id1 <- joinedTables[,1]
-id2 <- joinedTables[,numOfAttributesOryg+1] 
-edges <-c(as.data.frame(id1),as.data.frame(id2),as.data.frame(myTable)) 
+propositionalize <- function(source.dir = getwd(), source.name, output.dir = getwd(), output.name){
 
-edges <-c(as.data.table(id1),as.data.table(id2),as.data.table(myTable))
-edges <- as.data.table(edges)
-edges <- sqldf("select * from edges where myTable > 0") 
-g <- graph.data.frame(edges, directed=F)
-E(g)$weight <- edges[,3]
+  # read the input data in CSV format (assume that the label is the last attribute)
+  source.file <- paste(source.dir, source.name, sep = "/")
+  data <- read.csv(source.file, header=TRUE)
+  
+  data.discretized <- data.frame(data)
+  
+  # for each column compute the number of distinct values in the column and take the square root of that number
+  # this will serve as the universal number of discretization bins for each column
+  unique.columns <- sapply(data, unique)
+  num.unique.columns <- sapply(unique.columns, length)
+  num.bins <- round(sqrt(num.unique.columns))
+  
+  # discretize all columns in the input dataset using the equi-width discretization
+  for (i in 1:(ncol(data)-1)) 
+    data.discretized[i] <- discretize(data[i], "equalwidth", num.bins[i])
+  
+  
+  #write.csv(myDataDisc,file = path2, row.names=F)
+  #myDataDisc <- read.table(path2, header=T, stringsAsFactors=TRUE,sep=",")
+  
+  # add an ID column to the data frame
+  id <- 1:nrow(data.discretized)
+  data.discretized <- cbind(id, data.discretized)
 
+  # get the number of all attributes
+  num.attributes <- length(names(data.discretized))
 
-transitivity_weighted = transitivity(g, type="weighted")
-edges2 <- symmetrise_w(edges, method="MAX")
-degree_w <- degree_w(edges2,measure="output", type="out", alpha=1)
-degree <- degree_w [,"output"] #/nrow(myData)
-edges[,3] <- 1/edges[,3]
-betweenness = betweenness(g, v=V(g), directed = F, normalized = F)
-write.csv(c(myData,as.data.table(transitivity_weighted),as.data.table(degree),as.data.table(betweenness)),path3, row.names=F)
-})
+  # create a join of data frames
+  join <- sqldf("SELECT * FROM 'data.discretized' df1 JOIN 'data.discretized' df2 ON df1.id < df2.id")
+  
+  # order columns alphabetically by name
+  join.ordered <- join[, order(names(join))]
+
+  count.common.values <- function(x) {
+    width <- length(x)/2
+    count <- 0
+    for (i in 1:width) {
+      if(x[2*i-1] == x[2*i])
+        count <- count+1
+    }
+    count
+  }
+  
+  # create a vector containing, for each pair of objects, the number of common values between objects
+  # and merge this vector with the data. Then, remove pairs of objects that have no values in common
+  common.values <- apply(join.ordered, 1, count.common.values)
+  edges <- sqldf("SELECT df1.id, df2.id FROM 'data.discretized' df1 JOIN 'data.discretized' df2 ON df1.id < df2.id")
+  edges <- cbind(edges, common.values)
+  edges <- edges[common.values > 0, ]
+
+  # create a directed graph from the edges data frame and set the number of common values as the weight of each edge
+  g <- graph.data.frame(edges, directed=FALSE)
+  E(g)$weight <- edges[,3]
+
+  # compute statistics on the graph
+  clustering.coefficient <- transitivity(g, type="weighted")
+  degree <- graph.strength(g, loops = FALSE)
+  betweenness <- betweenness(g, directed = FALSE, normalized = FALSE)
+  bonacich <- alpha.centrality(g, alpha = -0.1)
+  bonacich <- round(bonacich*100)
+
+  # create a data frame with all network statistics
+  network.attributes <- cbind(degree, betweenness, clustering.coefficient, bonacich)
+  names(network.attributes) <- c("degree", "betweenness", "clustering coefficient", "bonacich power")
+  
+  # create a linear model to compute the weight of each instance
+  data.model <- cbind(data.discretized["label"], network.attributes)
+  linear.model <- lm(label ~ ., data = data.model)
+  final.model <- step(linear.model)
+  
+  # read the names of attributes in the model
+  # remove the first attribute of the model which contains the intercept
+  model.names <- names(final.model$coefficients)
+  intercept <- model.names[1]
+  model.names <- model.names[2:length(model.names)]
+  
+  # compute the weight based on the model
+  weight <- 0
+  for (name in model.names) {
+    weight <- weight + final.model$coefficients[name] * network.attributes[, c(name)]
+  }
+  weight <- weight + final.model$coefficients[intercept]
+  weight <- round(abs(weight)*100)
+  
+  # write out the result
+  output.file <- paste(output.dir, output.name, sep = "/")
+  data.output <- cbind(data.discretized, network.attributes, weight)
+  
+  write.csv(data.output, file = output.file,  row.names=FALSE)
+}
