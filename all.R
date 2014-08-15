@@ -21,22 +21,38 @@ propositionalize <- function(source.dir = getwd(), source.name, output.dir = get
   
   # for each column compute the number of distinct values in the column and take the square root of that number
   # this will serve as the universal number of discretization bins for each column
-  unique.columns <- sapply(data, unique)
-  num.unique.columns <- sapply(unique.columns, length)
-  num.bins <- round(sqrt(num.unique.columns))
+  #unique.columns <- sapply(data, unique)
+  #num.unique.columns <- sapply(unique.columns, length)
+  #num.bins <- round(sqrt(num.unique.columns))
   
   # discretize all columns in the input dataset using the equi-width discretization
-  for (i in 1:(ncol(data)-1)) 
-    data.discretized[i] <- discretize(data[i], "equalwidth", num.bins[i])
+  #for (i in 1:(ncol(data)-1)) 
+  # data.discretized[i] <- discretize(data[i], "equalwidth", num.bins[i])
+	
+  # discretize all columns in the input dataset using the chi merge discretization and add categorical columns not changed
+  nrCol <- ncol(data)
+  disc <- data["label"]
+  id <- 1:nrow(data)
+  # add an ID column to the data frame
+  categ <- id
+  while (nrCol >=1){
+  nrCol <- nrCol -1
+    if(is.numeric(data[,nrCol]))
+        disc <- cbind(data[nrCol],disc)
+    else
+        categ <- cbind(categ, data[nrCol])
+    }
+  disc=chiM(disc,alpha=0.1) # function works properly only when all attributes are numeric
+  data.discretized <- cbind(categ,disc$Disc.data)
+  colnames(data.discretized )[1] <- "id"
   
+  # add an ID column to the data frame
+  #id <- 1:nrow(data.discretized)
+  #data.discretized <- cbind(id, data.discretized)
   
   #write.csv(myDataDisc,file = path2, row.names=F)
   #myDataDisc <- read.table(path2, header=T, stringsAsFactors=TRUE,sep=",")
   
-  # add an ID column to the data frame
-  id <- 1:nrow(data.discretized)
-  data.discretized <- cbind(id, data.discretized)
-
   # get the number of all attributes
   num.attributes <- length(names(data.discretized))
 
@@ -50,7 +66,7 @@ propositionalize <- function(source.dir = getwd(), source.name, output.dir = get
     width <- length(x)/2
     count <- 0
     for (i in 1:width) {
-      if(x[2*i-1] == x[2*i])
+      if(!is.na(x[2*i-1]) && !is.na(x[2*i]) && x[2*i-1] == x[2*i])
         count <- count+1
     }
     count
