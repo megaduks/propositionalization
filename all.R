@@ -11,11 +11,14 @@ library(discretization)
 library(sqldf)
 library(igraph)
 
-propositionalize <- function(source.dir = getwd(), source.name, output.dir = getwd(), output.name){
+#discList -optional parameter, list with attributes to discretize numbers ex. list(5,6)
+#discInteger - bool paremeter, indicating if integers are to be discretized along with continuous parameters  
+propositionalize <- function(source.dir = getwd(), source.name, output.dir = getwd(), output.name, discList, discIntegers){
+
 
   # read the input data in CSV format (assume that the label is the last attribute)
   source.file <- paste(source.dir, source.name, sep = "/")
-  data <- read.csv(source.file, header=TRUE)
+  data <- read.csv(source.file, header=TRUE,na.strings=c("?","NA"))
   
   data.discretized <- data.frame(data)
   
@@ -28,23 +31,39 @@ propositionalize <- function(source.dir = getwd(), source.name, output.dir = get
   # discretize all columns in the input dataset using the equi-width discretization
   #for (i in 1:(ncol(data)-1)) 
   # data.discretized[i] <- discretize(data[i], "equalwidth", num.bins[i])
-	
+
+
   # discretize all columns in the input dataset using the chi merge discretization and add categorical columns not changed
   nrCol <- ncol(data)
   disc <- data["label"]
-  id <- 1:nrow(data)
   # add an ID column to the data frame
+  id <- 1:nrow(data)
   categ <- id
+  
   while (nrCol >=1){
   nrCol <- nrCol -1
-    if(is.numeric(data[,nrCol]))
-        disc <- cbind(data[nrCol],disc)
-    else
-        categ <- cbind(categ, data[nrCol])
+	  if(length(discList)==0){
+		if(is.numeric(data[,nrCol]) && (!is.integer(data[,nrCol]) || discIntegers)) #
+			disc <- cbind(data[nrCol],disc)
+		else
+			categ <- cbind(categ, data[nrCol])
+		}
+		else{
+		if(nrCol %in% discList)
+			disc <- cbind(data[nrCol],disc)
+		else
+			categ <- cbind(categ, data[nrCol])
+		
+		}
     }
-  disc=chiM(disc,alpha=0.1) # function works properly only when all attributes are numeric
-  data.discretized <- cbind(categ,disc$Disc.data)
+  if(ncol(disc) >1){
+    disc=chiM(disc,alpha=0.1) # function works properly only when all attributes in argument are numeric
+    data.discretized <- cbind(categ,disc$Disc.data)}
+  else
+    data.discretized <- cbind(categ, disc)
   colnames(data.discretized )[1] <- "id"
+  
+ 
   
   # add an ID column to the data frame
   #id <- 1:nrow(data.discretized)
@@ -79,16 +98,19 @@ propositionalize <- function(source.dir = getwd(), source.name, output.dir = get
   edges <- cbind(edges, common.values)
   edges <- edges[common.values > 0, ]
 
-  # create a directed graph from the edges data frame and set the number of common values as the weight of each edge
+  # create a undirected  graph from the edges data frame and set the number of common values as the weight of each edge
   g <- graph.data.frame(edges, directed=FALSE)
   E(g)$weight <- edges[,3]
 
   # compute statistics on the graph
   clustering.coefficient <- transitivity(g, type="weighted")
   degree <- graph.strength(g, loops = FALSE)
-  betweenness <- betweenness(g, directed = FALSE, normalized = FALSE)
   bonacich <- alpha.centrality(g, alpha = -0.1)
   bonacich <- round(bonacich*100)
+  # change edges weights
+  edges[,3] <- 1/edges[,3]
+  E(g)$weight <- edges[,3]
+  betweenness <- betweenness(g, directed = FALSE, normalized = FALSE)
 
   # create a data frame with all network statistics
   network.attributes <- cbind(degree, betweenness, clustering.coefficient, bonacich)
@@ -110,6 +132,7 @@ propositionalize <- function(source.dir = getwd(), source.name, output.dir = get
   weight <- 0
   for (name in model.names) {
     weight <- weight + final.model$coefficients[name] * network.attributes[, c(name)]
+	print(final.model$coefficients[name])
   }
   weight <- weight + final.model$coefficients[intercept]
   residuals <- abs(weight - data.discretized["label"])
@@ -117,7 +140,8 @@ propositionalize <- function(source.dir = getwd(), source.name, output.dir = get
   
   # write out the result
   output.file <- paste(output.dir, output.name, sep = "/")
-  data.output <- cbind(data.discretized, network.attributes, weight)
+  colnames(weight)[1] <- "weight"
+  data.output <- cbind(data, network.attributes, weight)#.discretized
   
   write.csv(data.output, file = output.file,  row.names=FALSE)
 }
