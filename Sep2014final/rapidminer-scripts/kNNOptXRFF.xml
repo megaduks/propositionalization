@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<process version="5.3.015">
+  <context>
+    <input/>
+    <output/>
+    <macros/>
+  </context>
+  <operator activated="true" class="process" compatibility="5.3.015" expanded="true" name="Process">
+    <process expanded="true">
+      <operator activated="true" class="read_xrff" compatibility="5.3.015" expanded="true" height="60" name="Read XRFF" width="90" x="45" y="30">
+        <parameter key="data_file" value="C:\Users\Natalia\Documents\GitHub\propositionalization\final2\with%\3\horse.xrff"/>
+        <parameter key="id_attribute" value="id"/>
+      </operator>
+      <operator activated="true" class="replace_missing_values" compatibility="5.3.015" expanded="true" height="94" name="Replace Missing Values" width="90" x="45" y="165">
+        <list key="columns"/>
+      </operator>
+      <operator activated="true" class="numerical_to_polynominal" compatibility="5.3.015" expanded="true" height="76" name="Numerical to Polynominal" width="90" x="246" y="165">
+        <parameter key="attribute_filter_type" value="single"/>
+        <parameter key="attribute" value="label"/>
+        <parameter key="include_special_attributes" value="true"/>
+      </operator>
+      <operator activated="true" class="normalize" compatibility="5.3.015" expanded="true" height="94" name="Normalize" width="90" x="313" y="300">
+        <parameter key="method" value="range transformation"/>
+      </operator>
+      <operator activated="true" class="optimize_parameters_grid" compatibility="5.3.015" expanded="true" height="112" name="Optimize Parameters (Grid)" width="90" x="447" y="120">
+        <list key="parameters">
+          <parameter key="W-IBk.K" value="3,5,7,9,11"/>
+        </list>
+        <process expanded="true">
+          <operator activated="true" class="x_validation" compatibility="5.1.002" expanded="true" height="112" name="Validation" width="90" x="246" y="165">
+            <description>A cross-validation evaluating a decision tree model.</description>
+            <parameter key="use_local_random_seed" value="true"/>
+            <process expanded="true">
+              <operator activated="true" class="weka:W-IBk" compatibility="5.3.001" expanded="true" height="76" name="W-IBk" width="90" x="112" y="300">
+                <parameter key="F" value="true"/>
+                <parameter key="K" value="11"/>
+              </operator>
+              <connect from_port="training" to_op="W-IBk" to_port="training set"/>
+              <connect from_op="W-IBk" from_port="model" to_port="model"/>
+              <portSpacing port="source_training" spacing="0"/>
+              <portSpacing port="sink_model" spacing="0"/>
+              <portSpacing port="sink_through 1" spacing="0"/>
+            </process>
+            <process expanded="true">
+              <operator activated="true" class="apply_model" compatibility="5.3.015" expanded="true" height="76" name="Apply Model" width="90" x="45" y="30">
+                <list key="application_parameters"/>
+              </operator>
+              <operator activated="true" class="performance" compatibility="5.3.015" expanded="true" height="76" name="Performance" width="90" x="275" y="30">
+                <parameter key="use_example_weights" value="false"/>
+              </operator>
+              <connect from_port="model" to_op="Apply Model" to_port="model"/>
+              <connect from_port="test set" to_op="Apply Model" to_port="unlabelled data"/>
+              <connect from_op="Apply Model" from_port="labelled data" to_op="Performance" to_port="labelled data"/>
+              <connect from_op="Performance" from_port="performance" to_port="averagable 1"/>
+              <portSpacing port="source_model" spacing="0"/>
+              <portSpacing port="source_test set" spacing="0"/>
+              <portSpacing port="source_through 1" spacing="0"/>
+              <portSpacing port="sink_averagable 1" spacing="0"/>
+              <portSpacing port="sink_averagable 2" spacing="0"/>
+            </process>
+          </operator>
+          <operator activated="true" class="log" compatibility="5.3.015" expanded="true" height="76" name="Log" width="90" x="447" y="210">
+            <parameter key="filename" value="C:\Users\Natalia\Documents\GitHub\propositionalization\final\wine1.csv"/>
+            <list key="log">
+              <parameter key="criterion" value="operator.Decision Tree.parameter.criterion"/>
+              <parameter key="minimal_leaf_size" value="operator.Decision Tree.parameter.minimal_leaf_size"/>
+              <parameter key="performance" value="operator.Performance.value.performance"/>
+            </list>
+          </operator>
+          <connect from_port="input 1" to_op="Validation" to_port="training"/>
+          <connect from_op="Validation" from_port="averagable 1" to_op="Log" to_port="through 1"/>
+          <connect from_op="Log" from_port="through 1" to_port="performance"/>
+          <portSpacing port="source_input 1" spacing="0"/>
+          <portSpacing port="source_input 2" spacing="0"/>
+          <portSpacing port="sink_performance" spacing="0"/>
+          <portSpacing port="sink_result 1" spacing="0"/>
+          <portSpacing port="sink_result 2" spacing="0"/>
+        </process>
+      </operator>
+      <connect from_op="Read XRFF" from_port="output" to_op="Replace Missing Values" to_port="example set input"/>
+      <connect from_op="Replace Missing Values" from_port="example set output" to_op="Numerical to Polynominal" to_port="example set input"/>
+      <connect from_op="Numerical to Polynominal" from_port="example set output" to_op="Normalize" to_port="example set input"/>
+      <connect from_op="Normalize" from_port="example set output" to_op="Optimize Parameters (Grid)" to_port="input 1"/>
+      <connect from_op="Optimize Parameters (Grid)" from_port="performance" to_port="result 1"/>
+      <connect from_op="Optimize Parameters (Grid)" from_port="parameter" to_port="result 2"/>
+      <connect from_op="Optimize Parameters (Grid)" from_port="result 1" to_port="result 3"/>
+      <portSpacing port="source_input 1" spacing="0"/>
+      <portSpacing port="sink_result 1" spacing="0"/>
+      <portSpacing port="sink_result 2" spacing="0"/>
+      <portSpacing port="sink_result 3" spacing="0"/>
+      <portSpacing port="sink_result 4" spacing="0"/>
+    </process>
+  </operator>
+</process>

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<process version="5.3.015">
+  <context>
+    <input/>
+    <output/>
+    <macros/>
+  </context>
+  <operator activated="true" class="process" compatibility="5.3.015" expanded="true" name="Process">
+    <description>Performs a crossvalidation on a given data set with nominal label, using a Decision Tree as learning algorithm.</description>
+    <process expanded="true">
+      <operator activated="true" class="read_xrff" compatibility="5.3.015" expanded="true" height="60" name="Read XRFF" width="90" x="45" y="75">
+        <parameter key="data_file" value="C:\Users\Natalia\Documents\GitHub\propositionalization\final2\with%\6\WQR5.xrff"/>
+        <parameter key="id_attribute" value="id"/>
+      </operator>
+      <operator activated="true" class="numerical_to_polynominal" compatibility="5.3.015" expanded="true" height="76" name="Numerical to Polynominal" width="90" x="112" y="165">
+        <parameter key="attribute_filter_type" value="single"/>
+        <parameter key="attribute" value="label"/>
+        <parameter key="include_special_attributes" value="true"/>
+      </operator>
+      <operator activated="true" class="discretize_by_entropy" compatibility="5.3.015" expanded="true" height="94" name="Discretize" width="90" x="313" y="165"/>
+      <operator activated="true" class="x_validation" compatibility="5.1.002" expanded="true" height="112" name="Validation" width="90" x="514" y="30">
+        <description>A cross-validation evaluating a decision tree model.</description>
+        <parameter key="use_local_random_seed" value="true"/>
+        <process expanded="true">
+          <operator activated="true" class="naive_bayes" compatibility="5.3.015" expanded="true" height="76" name="Naive Bayes" width="90" x="112" y="30"/>
+          <connect from_port="training" to_op="Naive Bayes" to_port="training set"/>
+          <connect from_op="Naive Bayes" from_port="model" to_port="model"/>
+          <portSpacing port="source_training" spacing="0"/>
+          <portSpacing port="sink_model" spacing="0"/>
+          <portSpacing port="sink_through 1" spacing="0"/>
+        </process>
+        <process expanded="true">
+          <operator activated="true" class="apply_model" compatibility="5.3.015" expanded="true" height="76" name="Apply Model" width="90" x="45" y="30">
+            <list key="application_parameters"/>
+          </operator>
+          <operator activated="true" class="performance" compatibility="5.3.015" expanded="true" height="76" name="Performance" width="90" x="180" y="30">
+            <parameter key="use_example_weights" value="false"/>
+          </operator>
+          <connect from_port="model" to_op="Apply Model" to_port="model"/>
+          <connect from_port="test set" to_op="Apply Model" to_port="unlabelled data"/>
+          <connect from_op="Apply Model" from_port="labelled data" to_op="Performance" to_port="labelled data"/>
+          <connect from_op="Performance" from_port="performance" to_port="averagable 1"/>
+          <portSpacing port="source_model" spacing="0"/>
+          <portSpacing port="source_test set" spacing="0"/>
+          <portSpacing port="source_through 1" spacing="0"/>
+          <portSpacing port="sink_averagable 1" spacing="0"/>
+          <portSpacing port="sink_averagable 2" spacing="0"/>
+        </process>
+      </operator>
+      <connect from_op="Read XRFF" from_port="output" to_op="Numerical to Polynominal" to_port="example set input"/>
+      <connect from_op="Numerical to Polynominal" from_port="example set output" to_op="Discretize" to_port="example set input"/>
+      <connect from_op="Discretize" from_port="example set output" to_op="Validation" to_port="training"/>
+      <connect from_op="Validation" from_port="averagable 1" to_port="result 1"/>
+      <portSpacing port="source_input 1" spacing="0"/>
+      <portSpacing port="sink_result 1" spacing="0"/>
+      <portSpacing port="sink_result 2" spacing="0"/>
+    </process>
+  </operator>
+</process>
